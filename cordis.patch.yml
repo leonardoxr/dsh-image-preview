@@ -1,0 +1,4 @@
+- insert:
+    - id: dsh-image-preview
+      name: dsh-image-preview
+      config: {}
