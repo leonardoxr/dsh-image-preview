@@ -15,6 +15,13 @@ The plugin uses DSH's public, session-scoped `tool.call.toolview` slot. Because 
 - Blob URLs are revoked on replacement, retry, unmount, and HMR disposal.
 - Malformed/legacy results and attachment RPC failures degrade to a bounded inline error with no filesystem or network fallback.
 
+## Settings
+
+The plugin contributes an **Image previews** card under DSH Settings → Plugins with two live, persisted options:
+
+- **Enable inline previews** — disabling it removes the custom renderer and restores DSH's generic tool row.
+- **Open previews automatically** — when disabled, each image starts collapsed and loads only after **Show preview** is clicked.
+
 ## Development
 
 ```sh
@@ -30,7 +37,7 @@ A tarball avoids git-build permissions and is robust when the checkout path cont
 
 ```sh
 pnpm pack --pack-destination "$HOME/.dsh/packages"
-dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.1.0.tgz"
+dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.2.0.tgz"
 dsh --profile web --dump-config
 ```
 

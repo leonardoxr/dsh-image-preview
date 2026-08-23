@@ -1,4 +1,22 @@
-/** Host half: mounting this no-op plugin makes its Web client bundle discoverable. */
-export const name = 'dsh-image-preview'
+import type { Context } from '@deepseek-ai/cordis'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import Schema from '@deepseek-ai/schemastery'
+import { DEFAULT_SETTINGS, SETTINGS_NAMESPACE_VALUE, type ImagePreviewSettings } from './settings.js'
 
-export function apply(): void {}
+export const name = 'dsh-image-preview'
+export const inject = ['settings'] as const
+export const SETTINGS_NAMESPACE = settingsNamespace(SETTINGS_NAMESPACE_VALUE)
+
+export type Config = ImagePreviewSettings
+
+export const Config: Schema<Config> = Schema.object({
+  enabled: Schema.boolean().default(DEFAULT_SETTINGS.enabled),
+  defaultOpen: Schema.boolean().default(DEFAULT_SETTINGS.defaultOpen),
+})
+
+export function apply(ctx: Context, config: Config): void {
+  ctx.settings.register(SETTINGS_NAMESPACE, Config, {
+    base: config,
+    applies: 'live',
+  })
+}

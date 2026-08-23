@@ -1,6 +1,6 @@
 {
   "name": "dsh-image-preview",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Inline previews for DeepSeek Harness read_image tool calls, including nested Code Mode calls.",
   "type": "module",
   "main": "lib/index.js",
@@ -26,6 +26,8 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-settings-plugins",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-tool"
       ]
@@ -44,29 +46,49 @@
   },
   "keywords": ["deepseek-harness", "dsh", "image", "preview", "read-image", "code-mode"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/leonardoxr/dsh-image-preview.git"
+  },
+  "homepage": "https://github.com/leonardoxr/dsh-image-preview#readme",
+  "bugs": {
+    "url": "https://github.com/leonardoxr/dsh-image-preview/issues"
+  },
   "engines": { "node": ">=22" },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-attachment": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-client-runtime": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-client-ui-tool": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.1",
     "react": "^18.3.1"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": { "optional": true },
     "@deepseek-ai/dsh-attachment": { "optional": true },
     "@deepseek-ai/dsh-client-runtime": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-settings": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-settings-plugins": { "optional": true },
     "@deepseek-ai/dsh-client-ui-slots": { "optional": true },
     "@deepseek-ai/dsh-client-ui-tool": { "optional": true },
+    "@deepseek-ai/dsh-settings": { "optional": true },
+    "@deepseek-ai/schemastery": { "optional": true },
     "react": { "optional": true }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-attachment": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-client-runtime": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings-plugins": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-client-ui-tool": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/schemastery": "^3.18.1",
     "@types/node": "^22.15.0",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.1",

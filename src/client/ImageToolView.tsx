@@ -15,6 +15,7 @@ import {
 export type ImageAttachmentLoader = (attachment: ImageAttachmentRef) => Promise<LoadedSessionImage>
 
 export type ReadImageToolViewProps = ToolCallViewProps & {
+  defaultOpen: boolean
   loadImage: ImageAttachmentLoader
 }
 
@@ -43,21 +44,23 @@ function metadata(attachment: ImageAttachmentRef): string {
 }
 
 export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
-  const { block, callId, loadImage, openFile, inspect } = props
+  const { block, callId, defaultOpen, loadImage, openFile, inspect } = props
   const path = useMemo(() => readImagePath(block), [block])
   const attachment = useMemo(() => imageAttachmentFrom(block), [block])
   const [attempt, setAttempt] = useState(0)
+  const [open, setOpen] = useState(defaultOpen)
   const [expanded, setExpanded] = useState(false)
   const [preview, setPreview] = useState<PreviewState>({ phase: 'idle' })
   const settled = isSettledToolBlock(block)
   const failed = settled && block.isError
 
   useEffect(() => {
+    setOpen(defaultOpen)
     setExpanded(false)
-  }, [callId])
+  }, [callId, defaultOpen])
 
   useEffect(() => {
-    if (attachment === null || failed) {
+    if (!open || attachment === null || failed) {
       setPreview({ phase: 'idle' })
       return
     }
@@ -80,10 +83,10 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
       alive = false
       release?.()
     }
-  }, [attachment, attempt, failed, loadImage])
+  }, [attachment, attempt, failed, loadImage, open])
 
   const label = basename(path) ?? attachment?.name ?? 'image'
-  const state = !settled ? 'running' : failed ? 'error' : preview.phase
+  const state = !settled ? 'running' : failed ? 'error' : !open ? 'closed' : preview.phase
   const recordedText = resultText(block, 500)
 
   const markDecodeFailure = () => {
@@ -118,6 +121,20 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
         )}
         {!settled && <span className="dsh-image-preview-status">Reading…</span>}
         {failed && <span className="dsh-image-preview-status dsh-image-preview-status-error">Failed</span>}
+        {settled && !failed && attachment !== null && (
+          <button
+            type="button"
+            className="dsh-image-preview-toggle"
+            aria-expanded={open}
+            aria-label={(open ? 'Hide' : 'Show') + ' preview of ' + label}
+            onClick={() => setOpen(value => !value)}
+          >
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {open ? 'Hide preview' : 'Show preview'}
+          </button>
+        )}
       </div>
 
       {!settled && (
@@ -140,14 +157,14 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
         </div>
       )}
 
-      {settled && !failed && attachment !== null && preview.phase === 'loading' && (
+      {open && settled && !failed && attachment !== null && preview.phase === 'loading' && (
         <div className="dsh-image-preview-loading" role="status">
           <span className="dsh-image-preview-spinner" aria-hidden="true" />
           Loading preview…
         </div>
       )}
 
-      {settled && !failed && attachment !== null && preview.phase === 'error' && (
+      {open && settled && !failed && attachment !== null && preview.phase === 'error' && (
         <div className="dsh-image-preview-message dsh-image-preview-message-error" role="alert">
           <span>{preview.message}</span>
           <button type="button" className="dsh-image-preview-retry" onClick={() => setAttempt(value => value + 1)}>
@@ -156,7 +173,7 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
         </div>
       )}
 
-      {preview.phase === 'ready' && (
+      {open && preview.phase === 'ready' && (
         <figure className="dsh-image-preview-figure" data-expanded={expanded || undefined}>
           <button
             type="button"

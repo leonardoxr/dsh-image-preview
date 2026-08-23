@@ -1,9 +1,12 @@
+import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ReadImageToolView } from '../src/client/ImageToolView.js'
 import { apply, PLUGIN_ID } from '../src/client/index.js'
 import type { LoadedSessionImage } from '../src/client/loader.js'
+import { ImagePreviewSettingsCard } from '../src/client/SettingsCard.js'
+import type { ImagePreviewSettings } from '../src/settings.js'
 import { imageAttachment, runCodeWithNestedImage, runningImage, settledImage } from './fixtures.js'
 
 interface Mounted {
@@ -23,28 +26,15 @@ afterEach(() => {
   document.head.querySelectorAll('style[data-plugin="dsh-image-preview"]').forEach(node => node.remove())
 })
 
-function mountView(block: ReturnType<typeof settledImage> | ReturnType<typeof runningImage>, loadImage: (attachment: typeof imageAttachment) => Promise<LoadedSessionImage>) {
+function mount(element: React.ReactNode) {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   const item: Mounted = { container, root, disposed: false }
   mounted.push(item)
-  const openFile = vi.fn()
-  const inspect = vi.fn()
-  act(() => {
-    root.render(<ReadImageToolView {...({
-      block,
-      callId: block.callId,
-      toolName: 'read_image',
-      loadImage,
-      openFile,
-      inspect,
-    } as never)} />)
-  })
+  act(() => root.render(element))
   return {
     container,
-    openFile,
-    inspect,
     async dispose() {
       if (item.disposed) return
       item.disposed = true
@@ -54,24 +44,79 @@ function mountView(block: ReturnType<typeof settledImage> | ReturnType<typeof ru
   }
 }
 
+function mountView(
+  block: ReturnType<typeof settledImage> | ReturnType<typeof runningImage>,
+  loadImage: (attachment: typeof imageAttachment) => Promise<LoadedSessionImage>,
+  defaultOpen = true,
+) {
+  const openFile = vi.fn()
+  const inspect = vi.fn()
+  return {
+    ...mount(<ReadImageToolView {...({
+      block,
+      callId: block.callId,
+      toolName: 'read_image',
+      defaultOpen,
+      loadImage,
+      openFile,
+      inspect,
+    } as never)} />),
+    openFile,
+    inspect,
+  }
+}
+
+function createSettings(initial: ImagePreviewSettings = { enabled: true, defaultOpen: true }) {
+  let value = initial
+  let snapshot = { status: 'ready', writable: true, value } as const
+  const listeners = new Set<() => void>()
+  const publish = () => {
+    snapshot = { status: 'ready', writable: true, value }
+    listeners.forEach(listener => listener())
+  }
+  const scope = {
+    getSnapshot: vi.fn(() => snapshot),
+    subscribe: vi.fn((listener: () => void) => {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    }),
+    set: vi.fn(async (key: keyof ImagePreviewSettings, next: boolean) => {
+      value = { ...value, [key]: next }
+      publish()
+    }),
+    unset: vi.fn(async (key: keyof ImagePreviewSettings) => {
+      const defaults: ImagePreviewSettings = { enabled: true, defaultOpen: true }
+      value = { ...value, [key]: defaults[key] }
+      publish()
+    }),
+  } as unknown as SettingsScope<ImagePreviewSettings>
+  return { scope, current: () => value }
+}
+
 describe('client registration', () => {
-  it('registers one lifecycle-owned read_image view and package-owned styles', () => {
-    const registrations: Array<{ descriptor: Record<string, unknown>; component: unknown; active: boolean }> = []
+  it('keeps the Settings card mounted and reacts live to both settings', async () => {
+    const registrations: Array<{
+      name: string
+      descriptor: Record<string, unknown>
+      component: unknown
+      active: boolean
+    }> = []
     const cleanups: Array<() => void> = []
+    const settings = createSettings()
     const ctx = {
       effect(effect: () => void | (() => void)) {
         const cleanup = effect()
         if (typeof cleanup === 'function') cleanups.push(cleanup)
       },
+      settingsScope: { bind: vi.fn(() => settings.scope) },
       sessions: { binding: vi.fn() },
       slots: {
         inject: (name: string, register: () => unknown) => {
-          expect(name).toBe('tool.call.toolview')
           const cleanup = register()
           return typeof cleanup === 'function' ? cleanup : () => {}
         },
         register: (descriptor: Record<string, unknown>, component: unknown) => {
-          const entry = { descriptor, component, active: true }
+          const entry = { name: String(descriptor.name), descriptor, component, active: true }
           registrations.push(entry)
           return () => { entry.active = false }
         },
@@ -79,18 +124,48 @@ describe('client registration', () => {
     }
 
     apply(ctx as never)
-    expect(registrations).toHaveLength(1)
-    expect(registrations[0]?.descriptor).toMatchObject({
-      name: 'tool.call.toolview',
-      key: 'read_image',
+    const active = (name: string) => registrations.filter(entry => entry.name === name && entry.active)
+    expect(active('settings.plugin.item')).toHaveLength(1)
+    expect(active('settings.plugin.item')[0]?.descriptor).toMatchObject({
+      key: 'dsh-image-preview',
       registrant: PLUGIN_ID,
     })
-    expect(typeof registrations[0]?.descriptor.inject).toBe('function')
-    expect(document.head.querySelector('style[data-plugin-css="dsh-image-preview/styles"]')).not.toBeNull()
+    expect(active('tool.call.toolview')).toHaveLength(1)
+
+    await settings.scope.set('enabled', false)
+    expect(active('settings.plugin.item')).toHaveLength(1)
+    expect(active('tool.call.toolview')).toHaveLength(0)
+
+    await settings.scope.set('defaultOpen', false)
+    await settings.scope.set('enabled', true)
+    const tool = active('tool.call.toolview')[0]
+    expect(tool?.descriptor).toMatchObject({ key: 'read_image', registrant: PLUGIN_ID })
+    const injected = (tool?.descriptor.inject as (sessionId: string) => { defaultOpen: boolean })('session-1')
+    expect(injected.defaultOpen).toBe(false)
 
     cleanups.reverse().forEach(cleanup => cleanup())
-    expect(registrations[0]?.active).toBe(false)
+    expect(active('settings.plugin.item')).toHaveLength(0)
+    expect(active('tool.call.toolview')).toHaveLength(0)
     expect(document.head.querySelector('style[data-plugin-css="dsh-image-preview/styles"]')).toBeNull()
+  })
+})
+
+describe('ImagePreviewSettingsCard', () => {
+  it('renders both persisted options and saves changes immediately', async () => {
+    const settings = createSettings()
+    const view = mount(<ImagePreviewSettingsCard settings={settings.scope} />)
+    act(() => view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-settings-header')?.click())
+
+    const inputs = view.container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')
+    expect(inputs).toHaveLength(2)
+    expect(Array.from(inputs, input => input.checked)).toEqual([true, true])
+
+    await act(async () => {
+      inputs[1]?.click()
+      await Promise.resolve()
+    })
+    expect(settings.scope.set).toHaveBeenCalledWith('defaultOpen', false)
+    expect(settings.current().defaultOpen).toBe(false)
   })
 })
 
@@ -117,6 +192,28 @@ describe('ReadImageToolView', () => {
     expect(release).toHaveBeenCalledOnce()
   })
 
+  it('stays closed without fetching until clicked when defaultOpen is off', async () => {
+    const release = vi.fn()
+    const loadImage = vi.fn(async () => ({ url: 'blob:opened-on-demand', attachment: imageAttachment, release }))
+    const view = mountView(settledImage(), loadImage, false)
+
+    expect(loadImage).not.toHaveBeenCalled()
+    expect(view.container.querySelector('img')).toBeNull()
+    const toggle = view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-toggle')
+    expect(toggle?.textContent).toContain('Show preview')
+
+    await act(async () => {
+      toggle?.click()
+      await Promise.resolve()
+    })
+    expect(loadImage).toHaveBeenCalledOnce()
+    expect(view.container.querySelector<HTMLImageElement>('img')?.src).toContain('blob:opened-on-demand')
+
+    await act(async () => toggle?.click())
+    expect(view.container.querySelector('img')).toBeNull()
+    expect(release).toHaveBeenCalledOnce()
+  })
+
   it('renders the same inline preview for the nested read_image child of run_code', async () => {
     const nested = runCodeWithNestedImage().subCalls[0]
     if (nested === undefined || !('kind' in nested)) throw new Error('nested fixture missing')
@@ -136,7 +233,6 @@ describe('ReadImageToolView', () => {
     await running.dispose()
 
     const failed = mountView(settledImage({ isError: true, content: [{ type: 'text', text: 'Error: denied' }] }), loadImage)
-    expect(failed.container.getAttribute('role')).not.toBe('alert')
     expect(failed.container.textContent).toContain('Error: denied')
     expect(loadImage).not.toHaveBeenCalled()
     await failed.dispose()
