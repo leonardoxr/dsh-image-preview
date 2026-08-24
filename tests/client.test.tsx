@@ -172,13 +172,14 @@ describe('ImagePreviewSettingsCard', () => {
 describe('ReadImageToolView', () => {
   it('renders a visible inline preview, metadata, navigation, expansion, and cleanup', async () => {
     const release = vi.fn()
-    const loadImage = vi.fn(async () => ({ url: 'blob:inline-preview', attachment: imageAttachment, release }))
+    const loadImage = vi.fn(async () => ({ url: 'blob:inline-preview', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release }))
     const view = mountView(settledImage(), loadImage)
 
     await act(async () => { await Promise.resolve() })
     const image = view.container.querySelector<HTMLImageElement>('img.dsh-image-preview-image')
     expect(image?.src).toContain('blob:inline-preview')
     expect(view.container.textContent).toContain('640×360 · 2.0 KB · PNG')
+    expect(view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.textContent).toBe('Copy image')
     expect(view.container.querySelector('[data-dsh-image-preview="tool-view"]')).not.toBeNull()
 
     act(() => view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-path')?.click())
@@ -192,9 +193,39 @@ describe('ReadImageToolView', () => {
     expect(release).toHaveBeenCalledOnce()
   })
 
+  it('copies the authenticated preview blob and reports success', async () => {
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const originalClipboardItem = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem')
+    const write = vi.fn(async () => undefined)
+    class TestClipboardItem {
+      static supports() { return true }
+      constructor(readonly payload: Record<string, Blob | Promise<Blob>>) {}
+    }
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } })
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem })
+    const blob = new Blob([1], { type: 'image/png' })
+    const view = mountView(settledImage(), vi.fn(async () => ({ url: 'blob:copy-preview', blob, attachment: imageAttachment, release: vi.fn() })))
+
+    try {
+      await act(async () => { await Promise.resolve() })
+      await act(async () => {
+        view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.click()
+        await Promise.resolve()
+      })
+      expect(write).toHaveBeenCalledOnce()
+      expect(view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.textContent).toBe('Copied')
+    } finally {
+      await view.dispose()
+      if (originalClipboard === undefined) delete (navigator as { clipboard?: Clipboard }).clipboard
+      else Object.defineProperty(navigator, 'clipboard', originalClipboard)
+      if (originalClipboardItem === undefined) delete (globalThis as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem
+      else Object.defineProperty(globalThis, 'ClipboardItem', originalClipboardItem)
+    }
+  })
+
   it('stays closed without fetching until clicked when defaultOpen is off', async () => {
     const release = vi.fn()
-    const loadImage = vi.fn(async () => ({ url: 'blob:opened-on-demand', attachment: imageAttachment, release }))
+    const loadImage = vi.fn(async () => ({ url: 'blob:opened-on-demand', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release }))
     const view = mountView(settledImage(), loadImage, false)
 
     expect(loadImage).not.toHaveBeenCalled()
@@ -217,7 +248,7 @@ describe('ReadImageToolView', () => {
   it('renders the same inline preview for the nested read_image child of run_code', async () => {
     const nested = runCodeWithNestedImage().subCalls[0]
     if (nested === undefined || !('kind' in nested)) throw new Error('nested fixture missing')
-    const loadImage = vi.fn(async () => ({ url: 'blob:nested-preview', attachment: imageAttachment, release: vi.fn() }))
+    const loadImage = vi.fn(async () => ({ url: 'blob:nested-preview', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release: vi.fn() }))
     const view = mountView(nested, loadImage)
 
     await act(async () => { await Promise.resolve() })
@@ -245,7 +276,7 @@ describe('ReadImageToolView', () => {
   it('offers retry after an attachment failure', async () => {
     const loadImage = vi.fn()
       .mockRejectedValueOnce(new Error('Attachment missing'))
-      .mockResolvedValueOnce({ url: 'blob:retried', attachment: imageAttachment, release: vi.fn() })
+      .mockResolvedValueOnce({ url: 'blob:retried', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release: vi.fn() })
     const view = mountView(settledImage(), loadImage)
 
     await act(async () => { await Promise.resolve() })
@@ -266,7 +297,7 @@ describe('ReadImageToolView', () => {
     await view.dispose()
 
     await act(async () => {
-      resolveImage?.({ url: 'blob:stale', attachment: imageAttachment, release })
+      resolveImage?.({ url: 'blob:stale', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release })
       await Promise.resolve()
     })
     expect(release).toHaveBeenCalledOnce()

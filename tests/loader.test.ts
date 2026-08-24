@@ -32,6 +32,9 @@ describe('loadSessionImage', () => {
     expect(binding).toHaveBeenCalledWith('session-1')
     expect(readAttachment).toHaveBeenCalledWith(imageAttachment.attachmentId)
     expect(loaded.url).toBe('blob:preview')
+    expect(loaded.blob).toBeInstanceOf(Blob)
+    expect(loaded.blob.type).toBe('image/png')
+    expect(loaded.blob.size).toBe(3)
     expect(URL.createObjectURL).toHaveBeenCalledOnce()
 
     loaded.release()

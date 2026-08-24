@@ -4,6 +4,7 @@ import { normalizeImageAttachment } from './model.js'
 
 export interface LoadedSessionImage {
   url: string
+  blob: Blob
   attachment: ImageAttachmentRef
   release(): void
 }
@@ -40,20 +41,23 @@ export async function loadSessionImage(
   }
 
   const bytes = Uint8Array.from(result.value.data)
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  const blob = new Blob([buffer], { type: attachment.mediaType })
   if (typeof URL.createObjectURL !== 'function') {
     return {
       url: 'data:' + attachment.mediaType + ';base64,' + bytesToBase64(bytes),
+      blob,
       attachment,
       release() {},
     }
   }
 
-  const buffer = new ArrayBuffer(bytes.byteLength)
-  new Uint8Array(buffer).set(bytes)
-  const url = URL.createObjectURL(new Blob([buffer], { type: attachment.mediaType }))
+  const url = URL.createObjectURL(blob)
   let active = true
   return {
     url,
+    blob,
     attachment,
     release() {
       if (!active) return

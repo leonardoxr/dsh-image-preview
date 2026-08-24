@@ -1,7 +1,7 @@
 {
   "name": "dsh-image-preview",
-  "version": "0.2.0",
-  "description": "Inline previews for DeepSeek Harness read_image tool calls, including nested Code Mode calls.",
+  "version": "0.3.0",
+  "description": "Inline previews and clipboard copying for DeepSeek Harness read_image tool calls, including nested Code Mode calls.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

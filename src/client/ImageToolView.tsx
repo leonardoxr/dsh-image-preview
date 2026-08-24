@@ -1,6 +1,7 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { ToolCallViewProps } from '@deepseek-ai/dsh-client-ui-tool/client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { clipboardFailureMessage, copyImageToClipboard } from './clipboard.js'
 import type { LoadedSessionImage } from './loader.js'
 import {
   basename,
@@ -23,6 +24,12 @@ type PreviewState =
   | { phase: 'idle' }
   | { phase: 'loading' }
   | { phase: 'ready'; image: LoadedSessionImage }
+  | { phase: 'error'; message: string }
+
+type CopyState =
+  | { phase: 'idle' }
+  | { phase: 'copying' }
+  | { phase: 'copied' }
   | { phase: 'error'; message: string }
 
 function errorMessage(error: unknown): string {
@@ -51,6 +58,9 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
   const [open, setOpen] = useState(defaultOpen)
   const [expanded, setExpanded] = useState(false)
   const [preview, setPreview] = useState<PreviewState>({ phase: 'idle' })
+  const [copyState, setCopyState] = useState<CopyState>({ phase: 'idle' })
+  const imageRef = useRef<HTMLImageElement>(null)
+  const copyRequestRef = useRef(0)
   const settled = isSettledToolBlock(block)
   const failed = settled && block.isError
 
@@ -58,6 +68,16 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
     setOpen(defaultOpen)
     setExpanded(false)
   }, [callId, defaultOpen])
+
+
+  useEffect(() => {
+    copyRequestRef.current += 1
+    setCopyState({ phase: 'idle' })
+  }, [attempt, callId, open])
+
+  useEffect(() => () => {
+    copyRequestRef.current += 1
+  }, [])
 
   useEffect(() => {
     if (!open || attachment === null || failed) {
@@ -94,6 +114,30 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
     preview.image.release()
     setPreview({ phase: 'error', message: 'The image bytes loaded, but this browser could not decode them.' })
   }
+
+
+  const copyImage = async () => {
+    if (preview.phase !== 'ready' || imageRef.current === null) return
+    const request = copyRequestRef.current + 1
+    copyRequestRef.current = request
+    setCopyState({ phase: 'copying' })
+    try {
+      await copyImageToClipboard(preview.image.blob, imageRef.current)
+      if (copyRequestRef.current === request) setCopyState({ phase: 'copied' })
+    } catch (error) {
+      if (copyRequestRef.current === request) {
+        setCopyState({ phase: 'error', message: clipboardFailureMessage(error) })
+      }
+    }
+  }
+
+  const copyLabel = copyState.phase === 'copying'
+    ? 'Copying…'
+    : copyState.phase === 'copied'
+      ? 'Copied'
+      : copyState.phase === 'error'
+        ? 'Copy failed'
+        : 'Copy image'
 
   return (
     <section
@@ -183,6 +227,7 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
             onClick={() => setExpanded(value => !value)}
           >
             <img
+              ref={imageRef}
               className="dsh-image-preview-image"
               src={preview.image.url}
               alt={'Preview of ' + label}
@@ -193,7 +238,19 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
           </button>
           <figcaption className="dsh-image-preview-caption">
             <span>{metadata(preview.image.attachment)}</span>
-            <span>{expanded ? 'Click to collapse' : 'Click to enlarge'}</span>
+            <span className="dsh-image-preview-caption-actions">
+              {copyState.phase === 'error' && (
+                <span className="dsh-image-preview-copy-error" role="alert" title={copyState.message}>{copyState.message}</span>
+              )}
+              <button
+                type="button"
+                className="dsh-image-preview-copy"
+                disabled={copyState.phase === 'copying'}
+                aria-live="polite"
+                onClick={() => { void copyImage() }}
+              >{copyLabel}</button>
+              <span>{expanded ? 'Click to collapse' : 'Click to enlarge'}</span>
+            </span>
           </figcaption>
         </figure>
       )}
