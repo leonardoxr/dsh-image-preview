@@ -1,5 +1,7 @@
 # dsh-image-preview
 
+English | [简体中文](README.zh.md)
+
 Inline image previews for the built-in DeepSeek Harness `read_image` tool.
 
 The plugin uses DSH's public, session-scoped `tool.call.toolview` slot. Because the official tool tree dispatches nested subcalls through the same slot, one renderer covers both:
