@@ -3,6 +3,12 @@ import { copyImageToClipboard, imageElementToPng } from '../src/client/clipboard
 
 const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
 const originalClipboardItem = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem')
+const originalCreateObjectURL = Object.getOwnPropertyDescriptor(URL, 'createObjectURL')
+const originalRevokeObjectURL = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL')
+const originalDecode = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'decode')
+const originalComplete = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'complete')
+const originalNaturalWidth = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'naturalWidth')
+const originalNaturalHeight = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'naturalHeight')
 const originalGetContext = HTMLCanvasElement.prototype.getContext
 const originalToBlob = HTMLCanvasElement.prototype.toBlob
 
@@ -16,6 +22,11 @@ class TestClipboardItem {
   }
 }
 
+function restoreProperty(target: object, key: PropertyKey, descriptor: PropertyDescriptor | undefined): void {
+  if (descriptor === undefined) Reflect.deleteProperty(target, key)
+  else Object.defineProperty(target, key, descriptor)
+}
+
 function decodedImage(width = 32, height = 24): HTMLImageElement {
   const image = document.createElement('img')
   Object.defineProperties(image, {
@@ -26,19 +37,39 @@ function decodedImage(width = 32, height = 24): HTMLImageElement {
   return image
 }
 
+function mockCanvas(blob: Blob | null = new Blob([Uint8Array.from([9])], { type: 'image/png' })) {
+  const drawImage = vi.fn()
+  HTMLCanvasElement.prototype.getContext = vi.fn(() => ({ drawImage }) as unknown as CanvasRenderingContext2D)
+  HTMLCanvasElement.prototype.toBlob = vi.fn((callback: BlobCallback) => callback(blob))
+  return { drawImage }
+}
+
 beforeEach(() => {
   writtenPayloads = []
-  write = vi.fn(async () => undefined)
+  write = vi.fn(async (items: TestClipboardItem[]) => {
+    for (const item of items) await Promise.all(Object.values(item.payload))
+  })
   TestClipboardItem.supports.mockClear()
+  TestClipboardItem.supports.mockImplementation((type: string) => type === 'image/png')
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } })
   Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem })
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:clipboard-source') })
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
+  Object.defineProperty(HTMLImageElement.prototype, 'decode', { configurable: true, value: vi.fn(async () => undefined) })
+  Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, get: () => true })
+  Object.defineProperty(HTMLImageElement.prototype, 'naturalWidth', { configurable: true, get: () => 32 })
+  Object.defineProperty(HTMLImageElement.prototype, 'naturalHeight', { configurable: true, get: () => 24 })
 })
 
 afterEach(() => {
-  if (originalClipboard === undefined) delete (navigator as { clipboard?: Clipboard }).clipboard
-  else Object.defineProperty(navigator, 'clipboard', originalClipboard)
-  if (originalClipboardItem === undefined) delete (globalThis as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem
-  else Object.defineProperty(globalThis, 'ClipboardItem', originalClipboardItem)
+  restoreProperty(navigator, 'clipboard', originalClipboard)
+  restoreProperty(globalThis, 'ClipboardItem', originalClipboardItem)
+  restoreProperty(URL, 'createObjectURL', originalCreateObjectURL)
+  restoreProperty(URL, 'revokeObjectURL', originalRevokeObjectURL)
+  restoreProperty(HTMLImageElement.prototype, 'decode', originalDecode)
+  restoreProperty(HTMLImageElement.prototype, 'complete', originalComplete)
+  restoreProperty(HTMLImageElement.prototype, 'naturalWidth', originalNaturalWidth)
+  restoreProperty(HTMLImageElement.prototype, 'naturalHeight', originalNaturalHeight)
   HTMLCanvasElement.prototype.getContext = originalGetContext
   HTMLCanvasElement.prototype.toBlob = originalToBlob
   vi.restoreAllMocks()
@@ -47,34 +78,59 @@ afterEach(() => {
 describe('copyImageToClipboard', () => {
   it('copies PNG bytes directly during the clipboard write', async () => {
     const source = new Blob([Uint8Array.from([1, 2, 3])], { type: 'image/png' })
-    await copyImageToClipboard(source, decodedImage())
+    await copyImageToClipboard(source)
 
     expect(write).toHaveBeenCalledOnce()
     expect(writtenPayloads).toHaveLength(1)
     expect(writtenPayloads[0]?.['image/png']).toBe(source)
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
-  it('converts unsupported image formats to PNG in-browser', async () => {
-    const drawImage = vi.fn()
-    HTMLCanvasElement.prototype.getContext = vi.fn(() => ({ drawImage }) as unknown as CanvasRenderingContext2D)
-    HTMLCanvasElement.prototype.toBlob = vi.fn((callback: BlobCallback) => {
-      callback(new Blob([Uint8Array.from([9])], { type: 'image/png' }))
+  it('starts clipboard.write synchronously before detached-blob conversion settles', async () => {
+    let finishDecode: (() => void) | undefined
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: vi.fn(() => new Promise<void>(resolve => { finishDecode = resolve })),
     })
+    const { drawImage } = mockCanvas()
 
-    await copyImageToClipboard(new Blob([Uint8Array.from([4])], { type: 'image/jpeg' }), decodedImage())
+    const copying = copyImageToClipboard(new Blob([Uint8Array.from([4])], { type: 'image/jpeg' }))
+    expect(write).toHaveBeenCalledOnce()
+    expect(HTMLCanvasElement.prototype.toBlob).not.toHaveBeenCalled()
 
-    expect(TestClipboardItem.supports).toHaveBeenCalledWith('image/jpeg')
+    finishDecode?.()
+    await copying
     expect(drawImage).toHaveBeenCalledOnce()
-    const converted = await writtenPayloads[0]?.['image/png']
-    expect(converted).toBeInstanceOf(Blob)
-    expect(converted?.type).toBe('image/png')
+    expect((await writtenPayloads[0]?.['image/png'])?.type).toBe('image/png')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:clipboard-source')
+  })
+
+  it('propagates clipboard rejection', async () => {
+    write.mockRejectedValueOnce(new DOMException('Permission denied', 'NotAllowedError'))
+    await expect(copyImageToClipboard(new Blob([], { type: 'image/png' }))).rejects.toThrow('Permission denied')
+  })
+
+  it('fails closed and revokes the detached URL when decoding fails', async () => {
+    Object.defineProperty(HTMLImageElement.prototype, 'decode', {
+      configurable: true,
+      value: vi.fn(async () => { throw new DOMException('bad bytes') }),
+    })
+    await expect(copyImageToClipboard(new Blob([], { type: 'image/jpeg' }))).rejects.toThrow('could not be decoded')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:clipboard-source')
   })
 
   it('fails closed when image clipboard access is unavailable', async () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
-    await expect(copyImageToClipboard(new Blob([], { type: 'image/png' }), decodedImage()))
-      .rejects.toThrow('not available')
+    await expect(copyImageToClipboard(new Blob([], { type: 'image/png' }))).rejects.toThrow('not available')
     expect(write).not.toHaveBeenCalled()
+  })
+
+  it('reports unavailable canvas and encoding failures', async () => {
+    HTMLCanvasElement.prototype.getContext = vi.fn(() => null)
+    await expect(imageElementToPng(decodedImage())).rejects.toThrow('cannot convert')
+
+    mockCanvas(null)
+    await expect(imageElementToPng(decodedImage())).rejects.toThrow('could not encode')
   })
 
   it('bounds canvas conversion size', async () => {

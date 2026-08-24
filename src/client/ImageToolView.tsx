@@ -59,10 +59,10 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [preview, setPreview] = useState<PreviewState>({ phase: 'idle' })
   const [copyState, setCopyState] = useState<CopyState>({ phase: 'idle' })
-  const imageRef = useRef<HTMLImageElement>(null)
   const copyRequestRef = useRef(0)
   const settled = isSettledToolBlock(block)
   const failed = settled && block.isError
+  const copyIdentity = preview.phase === 'ready' ? preview.image : null
 
   useEffect(() => {
     setOpen(defaultOpen)
@@ -73,7 +73,7 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
   useEffect(() => {
     copyRequestRef.current += 1
     setCopyState({ phase: 'idle' })
-  }, [attempt, callId, open])
+  }, [attempt, attachment?.attachmentId, callId, copyIdentity, open])
 
   useEffect(() => () => {
     copyRequestRef.current += 1
@@ -117,12 +117,12 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
 
 
   const copyImage = async () => {
-    if (preview.phase !== 'ready' || imageRef.current === null) return
+    if (preview.phase !== 'ready') return
     const request = copyRequestRef.current + 1
     copyRequestRef.current = request
     setCopyState({ phase: 'copying' })
     try {
-      await copyImageToClipboard(preview.image.blob, imageRef.current)
+      await copyImageToClipboard(preview.image.blob)
       if (copyRequestRef.current === request) setCopyState({ phase: 'copied' })
     } catch (error) {
       if (copyRequestRef.current === request) {
@@ -131,13 +131,13 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
     }
   }
 
-  const copyLabel = copyState.phase === 'copying'
+  const copyStatus = copyState.phase === 'copying'
     ? 'Copying…'
     : copyState.phase === 'copied'
       ? 'Copied'
       : copyState.phase === 'error'
-        ? 'Copy failed'
-        : 'Copy image'
+        ? copyState.message
+        : null
 
   return (
     <section
@@ -227,7 +227,6 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
             onClick={() => setExpanded(value => !value)}
           >
             <img
-              ref={imageRef}
               className="dsh-image-preview-image"
               src={preview.image.url}
               alt={'Preview of ' + label}
@@ -239,16 +238,21 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
           <figcaption className="dsh-image-preview-caption">
             <span>{metadata(preview.image.attachment)}</span>
             <span className="dsh-image-preview-caption-actions">
-              {copyState.phase === 'error' && (
-                <span className="dsh-image-preview-copy-error" role="alert" title={copyState.message}>{copyState.message}</span>
+              {copyStatus !== null && (
+                <span
+                  className={'dsh-image-preview-copy-status' + (copyState.phase === 'error' ? ' dsh-image-preview-copy-status-error' : '')}
+                  role={copyState.phase === 'error' ? 'alert' : 'status'}
+                  aria-live={copyState.phase === 'error' ? 'assertive' : 'polite'}
+                  title={copyState.phase === 'error' ? copyState.message : undefined}
+                >{copyStatus}</span>
               )}
               <button
                 type="button"
                 className="dsh-image-preview-copy"
                 disabled={copyState.phase === 'copying'}
-                aria-live="polite"
+                aria-label="Copy image"
                 onClick={() => { void copyImage() }}
-              >{copyLabel}</button>
+              >Copy image</button>
               <span>{expanded ? 'Click to collapse' : 'Click to enlarge'}</span>
             </span>
           </figcaption>

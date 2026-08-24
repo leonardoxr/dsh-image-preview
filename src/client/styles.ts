@@ -39,7 +39,8 @@ export const styles = `
 .dsh-image-preview-copy{appearance:none;flex:none;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;padding:1px 7px;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:16px;cursor:pointer}
 .dsh-image-preview-copy:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-image-preview-copy:disabled{cursor:wait;opacity:.65}
-.dsh-image-preview-copy-error{max-width:200px;color:var(--dsw-alias-state-error-primary)}
+.dsh-image-preview-copy-status{max-width:200px;color:var(--dsw-alias-label-tertiary)}
+.dsh-image-preview-copy-status-error{color:var(--dsw-alias-state-error-primary)}
 .dsh-image-preview-inspect{margin:2px 0 2px 4px;opacity:0;transition:opacity .1s}
 .dsh-image-preview-root:hover .dsh-image-preview-inspect,.dsh-image-preview-inspect:focus-visible{opacity:1}
 .dsh-image-preview-path:focus-visible,.dsh-image-preview-toggle:focus-visible,.dsh-image-preview-canvas:focus-visible,.dsh-image-preview-copy:focus-visible,.dsh-image-preview-retry:focus-visible,.dsh-image-preview-inspect:focus-visible,.dsh-image-preview-settings-header:focus-visible,.dsh-image-preview-settings-reset:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
@@ -70,6 +71,6 @@ export const styles = `
 .dsh-image-preview-settings-reset{appearance:none;flex:none;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:transparent;padding:5px 10px;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer}
 .dsh-image-preview-settings-reset:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary)}
 .dsh-image-preview-settings-reset:disabled{opacity:.5;cursor:default}
-@media (max-width:640px){.dsh-image-preview-loading,.dsh-image-preview-message,.dsh-image-preview-figure{width:calc(100% - 4px)}.dsh-image-preview-caption-actions>span:last-child{display:none}.dsh-image-preview-copy-error{max-width:120px}}
+@media (max-width:640px){.dsh-image-preview-loading,.dsh-image-preview-message,.dsh-image-preview-figure{width:calc(100% - 4px)}.dsh-image-preview-caption-actions>span:last-child{display:none}.dsh-image-preview-copy-status{max-width:120px}}
 @media (prefers-reduced-motion:reduce){.dsh-image-preview-root[data-state=running] .dsh-image-preview-header::after,.dsh-image-preview-spinner{animation:none}}
 `

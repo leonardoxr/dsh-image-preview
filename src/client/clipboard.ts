@@ -1,8 +1,10 @@
 const MAX_CONVERSION_DIMENSION = 16_384
 const MAX_CONVERSION_PIXELS = 40_000_000
 
-function clipboardError(message: string): Error {
-  return new Error(message)
+class ImageClipboardError extends Error {}
+
+function clipboardError(message: string): ImageClipboardError {
+  return new ImageClipboardError(message)
 }
 
 async function waitForDecodedImage(image: HTMLImageElement): Promise<void> {
@@ -45,7 +47,35 @@ export async function imageElementToPng(image: HTMLImageElement): Promise<Blob> 
   })
 }
 
-export async function copyImageToClipboard(source: Blob, image: HTMLImageElement): Promise<void> {
+export async function imageBlobToPng(source: Blob): Promise<Blob> {
+  if (typeof URL.createObjectURL !== 'function' || typeof URL.revokeObjectURL !== 'function') {
+    throw clipboardError('This browser cannot decode the image for clipboard conversion.')
+  }
+
+  const url = URL.createObjectURL(source)
+  const image = document.createElement('img')
+  image.decoding = 'async'
+  try {
+    if (typeof image.decode === 'function') {
+      image.src = url
+      await image.decode()
+    } else {
+      await new Promise<void>((resolve, reject) => {
+        image.addEventListener('load', () => resolve(), { once: true })
+        image.addEventListener('error', () => reject(clipboardError('The image could not be decoded for copying.')), { once: true })
+        image.src = url
+      })
+    }
+    return await imageElementToPng(image)
+  } catch (error) {
+    if (error instanceof ImageClipboardError) throw error
+    throw clipboardError('The image could not be decoded for copying.')
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+export async function copyImageToClipboard(source: Blob): Promise<void> {
   const clipboard = globalThis.navigator?.clipboard
   const ClipboardItemConstructor = globalThis.ClipboardItem
   if (clipboard?.write === undefined || ClipboardItemConstructor === undefined) {
@@ -56,11 +86,14 @@ export async function copyImageToClipboard(source: Blob, image: HTMLImageElement
   const canCopySource = source.type === 'image/png'
     || (typeof supports === 'function' && supports.call(ClipboardItemConstructor, source.type))
   const type = canCopySource ? source.type : 'image/png'
-  const value: Blob | Promise<Blob> = canCopySource ? source : imageElementToPng(image)
+  const value: Blob | Promise<Blob> = canCopySource ? source : imageBlobToPng(source)
   await clipboard.write([new ClipboardItemConstructor({ [type]: value })])
 }
 
 export function clipboardFailureMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim() !== '') return error.message.slice(0, 240)
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    const message = error.message.trim()
+    if (message !== '') return message.slice(0, 240)
+  }
   return 'The image could not be copied to the clipboard.'
 }

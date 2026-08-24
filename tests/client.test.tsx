@@ -35,6 +35,9 @@ function mount(element: React.ReactNode) {
   act(() => root.render(element))
   return {
     container,
+    rerender(next: React.ReactNode) {
+      act(() => root.render(next))
+    },
     async dispose() {
       if (item.disposed) return
       item.disposed = true
@@ -213,7 +216,103 @@ describe('ReadImageToolView', () => {
         await Promise.resolve()
       })
       expect(write).toHaveBeenCalledOnce()
-      expect(view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.textContent).toBe('Copied')
+      expect(view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.textContent).toBe('Copy image')
+      expect(view.container.querySelector('.dsh-image-preview-copy-status')?.textContent).toBe('Copied')
+    } finally {
+      await view.dispose()
+      if (originalClipboard === undefined) delete (navigator as { clipboard?: Clipboard }).clipboard
+      else Object.defineProperty(navigator, 'clipboard', originalClipboard)
+      if (originalClipboardItem === undefined) delete (globalThis as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem
+      else Object.defineProperty(globalThis, 'ClipboardItem', originalClipboardItem)
+    }
+  })
+
+  it('keeps the Copy image action stable when clipboard permission is denied', async () => {
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const originalClipboardItem = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem')
+    const write = vi.fn(async () => { throw new DOMException('Clipboard permission denied', 'NotAllowedError') })
+    class TestClipboardItem {
+      static supports() { return true }
+      constructor(readonly payload: Record<string, Blob | Promise<Blob>>) {}
+    }
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } })
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem })
+    const view = mountView(settledImage(), vi.fn(async () => ({
+      url: 'blob:copy-denied',
+      blob: new Blob([1], { type: 'image/png' }),
+      attachment: imageAttachment,
+      release: vi.fn(),
+    })))
+
+    try {
+      await act(async () => { await Promise.resolve() })
+      await act(async () => {
+        view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.click()
+        await Promise.resolve()
+      })
+      expect(view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.textContent).toBe('Copy image')
+      expect(view.container.querySelector('[role="alert"]')?.textContent).toContain('Clipboard permission denied')
+    } finally {
+      await view.dispose()
+      if (originalClipboard === undefined) delete (navigator as { clipboard?: Clipboard }).clipboard
+      else Object.defineProperty(navigator, 'clipboard', originalClipboard)
+      if (originalClipboardItem === undefined) delete (globalThis as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem
+      else Object.defineProperty(globalThis, 'ClipboardItem', originalClipboardItem)
+    }
+  })
+
+  it('does not apply a pending copy result after attachment replacement', async () => {
+    const originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const originalClipboardItem = Object.getOwnPropertyDescriptor(globalThis, 'ClipboardItem')
+    let finishWrite: (() => void) | undefined
+    const write = vi.fn(() => new Promise<void>(resolve => { finishWrite = resolve }))
+    class TestClipboardItem {
+      static supports() { return true }
+      constructor(readonly payload: Record<string, Blob | Promise<Blob>>) {}
+    }
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } })
+    Object.defineProperty(globalThis, 'ClipboardItem', { configurable: true, value: TestClipboardItem })
+
+    const replacement = { ...imageAttachment, attachmentId: 'sha256:replacement', name: 'replacement.png' }
+    const firstBlock = settledImage()
+    const secondBlock = settledImage({
+      content: [
+        { type: 'text', text: '<image path="C:/workspace/replacement.png" />' },
+        { type: 'image', attachment: replacement },
+      ],
+    })
+    const loadImage = vi.fn(async (attachment: typeof imageAttachment) => ({
+      url: 'blob:' + attachment.attachmentId,
+      blob: new Blob([attachment.attachmentId], { type: 'image/png' }),
+      attachment,
+      release: vi.fn(),
+    }))
+    const props = (block: typeof firstBlock) => ({
+      block,
+      callId: block.callId,
+      toolName: 'read_image',
+      defaultOpen: true,
+      loadImage,
+      openFile: vi.fn(),
+      inspect: vi.fn(),
+    })
+    const view = mount(<ReadImageToolView {...(props(firstBlock) as never)} />)
+
+    try {
+      await act(async () => { await Promise.resolve() })
+      act(() => view.container.querySelector<HTMLButtonElement>('.dsh-image-preview-copy')?.click())
+      expect(view.container.querySelector('.dsh-image-preview-copy-status')?.textContent).toBe('Copying…')
+
+      view.rerender(<ReadImageToolView {...(props(secondBlock) as never)} />)
+      await act(async () => { await Promise.resolve() })
+      expect(view.container.querySelector<HTMLImageElement>('img')?.src).toContain('blob:sha256:replacement')
+      expect(view.container.querySelector('.dsh-image-preview-copy-status')).toBeNull()
+
+      await act(async () => {
+        finishWrite?.()
+        await Promise.resolve()
+      })
+      expect(view.container.querySelector('.dsh-image-preview-copy-status')).toBeNull()
     } finally {
       await view.dispose()
       if (originalClipboard === undefined) delete (navigator as { clipboard?: Clipboard }).clipboard
