@@ -60,6 +60,11 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
   const [preview, setPreview] = useState<PreviewState>({ phase: 'idle' })
   const [copyState, setCopyState] = useState<CopyState>({ phase: 'idle' })
   const copyRequestRef = useRef(0)
+  const loadImageRef = useRef(loadImage)
+  loadImageRef.current = loadImage
+  const attachmentRef = useRef(attachment)
+  attachmentRef.current = attachment
+  const attachmentKey = attachment === null ? null : attachment.attachmentId
   const settled = isSettledToolBlock(block)
   const failed = settled && block.isError
   const copyIdentity = preview.phase === 'ready' ? preview.image : null
@@ -80,7 +85,8 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
   }, [])
 
   useEffect(() => {
-    if (!open || attachment === null || failed) {
+    const currentAttachment = attachmentRef.current
+    if (!open || currentAttachment === null || failed) {
       setPreview({ phase: 'idle' })
       return
     }
@@ -88,7 +94,7 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
     let alive = true
     let release: (() => void) | undefined
     setPreview({ phase: 'loading' })
-    void loadImage(attachment).then((image) => {
+    void loadImageRef.current(currentAttachment).then((image) => {
       if (!alive) {
         image.release()
         return
@@ -103,7 +109,7 @@ export function ReadImageToolView(props: ReadImageToolViewProps): JSX.Element {
       alive = false
       release?.()
     }
-  }, [attachment, attempt, failed, loadImage, open])
+  }, [attachmentKey, attempt, failed, open])
 
   const label = basename(path) ?? attachment?.name ?? 'image'
   const state = !settled ? 'running' : failed ? 'error' : !open ? 'closed' : preview.phase

@@ -401,4 +401,36 @@ describe('ReadImageToolView', () => {
     })
     expect(release).toHaveBeenCalledOnce()
   })
+
+  it('keeps the loaded preview when the same attachment re-renders through a fresh block and loader', async () => {
+    const release = vi.fn()
+    const firstLoad = vi.fn(async () => ({ url: 'blob:stable', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release }))
+    const render = (block: ReturnType<typeof settledImage>, loadImage: typeof firstLoad) => (
+      <ReadImageToolView {...({
+        block,
+        callId: block.callId,
+        toolName: 'read_image',
+        defaultOpen: true,
+        loadImage,
+        openFile: vi.fn(),
+        inspect: vi.fn(),
+      } as never)} />
+    )
+    const view = mount(render(settledImage(), firstLoad))
+
+    await act(async () => { await Promise.resolve() })
+    expect(view.container.querySelector<HTMLImageElement>('img')?.src).toContain('blob:stable')
+    expect(firstLoad).toHaveBeenCalledOnce()
+
+    // The conversation re-renders the same call with a fresh block object and a fresh loader
+    // closure on every snapshot tick. The preview must NOT revoke and refetch the attachment.
+    const secondLoad = vi.fn(async () => ({ url: 'blob:stable-2', blob: new Blob([1], { type: 'image/png' }), attachment: imageAttachment, release }))
+    view.rerender(render(settledImage(), secondLoad))
+    await act(async () => { await Promise.resolve() })
+
+    expect(secondLoad).not.toHaveBeenCalled()
+    expect(firstLoad).toHaveBeenCalledOnce()
+    expect(view.container.querySelector<HTMLImageElement>('img')?.src).toContain('blob:stable')
+    expect(release).not.toHaveBeenCalled()
+  })
 })
