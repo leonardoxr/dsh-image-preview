@@ -44,7 +44,7 @@ A tarball avoids git-build permissions and is robust when the checkout path cont
 
 ```sh
 pnpm pack --pack-destination "$HOME/.dsh/packages"
-dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.3.3.tgz"
+dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.3.4.tgz"
 dsh --profile web --dump-config
 ```
 
