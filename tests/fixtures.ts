@@ -1,5 +1,5 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
+import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 
 export const imageAttachment = {
   attachmentId: 'sha256:test-image',

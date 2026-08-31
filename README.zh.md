@@ -29,6 +29,8 @@
 
 ## 开发
 
+需要 DeepSeek Harness 0.1.2-alpha.2 或兼容版本。
+
 ```sh
 pnpm install
 pnpm check
@@ -42,7 +44,7 @@ pnpm check
 
 ```sh
 pnpm pack --pack-destination "$HOME/.dsh/packages"
-dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.3.0.tgz"
+dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.3.3.tgz"
 dsh --profile web --dump-config
 ```
 

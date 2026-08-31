@@ -29,6 +29,8 @@ The plugin contributes an **Image previews** card under DSH Settings → Plugins
 
 ## Development
 
+Requires DeepSeek Harness 0.1.2-alpha.2 or compatible.
+
 ```sh
 pnpm install
 pnpm check
@@ -42,7 +44,7 @@ A tarball avoids git-build permissions and is robust when the checkout path cont
 
 ```sh
 pnpm pack --pack-destination "$HOME/.dsh/packages"
-dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.3.0.tgz"
+dsh plugin --profile web add "$HOME/.dsh/packages/dsh-image-preview-0.3.3.tgz"
 dsh --profile web --dump-config
 ```
 

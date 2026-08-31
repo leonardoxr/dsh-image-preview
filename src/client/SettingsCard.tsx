@@ -1,4 +1,4 @@
-import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { useState, useSyncExternalStore } from 'react'
 import {
   DEFAULT_SETTINGS,

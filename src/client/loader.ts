@@ -1,5 +1,6 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { ClientContext, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { normalizeImageAttachment } from './model.js'
 
 export interface LoadedSessionImage {
@@ -24,7 +25,7 @@ function bytesToBase64(bytes: Uint8Array): string {
  * No path or arbitrary URL is accepted at this boundary.
  */
 export async function loadSessionImage(
-  ctx: Pick<ClientContext, 'sessions'>,
+  ctx: { sessions: ISessions },
   sessionId: SessionId,
   expected: ImageAttachmentRef,
 ): Promise<LoadedSessionImage> {

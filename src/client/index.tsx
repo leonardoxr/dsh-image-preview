@@ -1,6 +1,10 @@
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { ClientContext, SessionId, SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import {
@@ -17,6 +21,8 @@ import { STYLE_ID, styles } from './styles.js'
 export const PLUGIN_ID = 'dsh-image-preview'
 export const inject = ['slots', 'sessions', 'settingsScope'] as const
 
+type ImagePreviewClientContext = ClientContext & { sessions: ISessions }
+
 export function installStyles(): () => void {
   document.querySelector('style[data-plugin-css="' + STYLE_ID + '"]')?.remove()
   const tag = document.createElement('style')
@@ -28,7 +34,7 @@ export function installStyles(): () => void {
 }
 
 export function registerPreviewToolView(
-  ctx: Pick<ClientContext, 'sessions' | 'slots'>,
+  ctx: Pick<ImagePreviewClientContext, 'sessions' | 'slots'>,
   settings: SettingsScope<ImagePreviewSettings>,
 ): () => void {
   let disposeView: (() => void) | undefined
@@ -65,7 +71,7 @@ export function registerPreviewToolView(
   }
 }
 
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: ImagePreviewClientContext): void {
   ctx.effect(installStyles, 'dsh-image-preview: styles')
   const settings = ctx.settingsScope.bind<ImagePreviewSettings>({
     namespace: SETTINGS_NAMESPACE_VALUE,
